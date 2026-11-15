@@ -1,9 +1,9 @@
 [plugin]
 icon = "https://wu-clan.github.io/picx-images-hosting/logo/fba.svg"
 summary = "AI Buddy Billing"
-version = "0.1.0"
+version = "0.2.0"
 fba_version = ">=2.0.0,<3.0.0"
-description = "为 AI Buddy 提供模型价格、用量账本、用户余额、充值调整和账单归集"
+description = "为 AI Buddy 提供模型价格（支持 models.dev 同步、峰谷价与上下文阶梯价）、用量账本、用户余额、充值调整和账单归集"
 author = "wu-clan"
 tags = ["ai", "payment"]
 depends_on = ["ai_buddy"]
@@ -15,3 +15,7 @@ router = ["v1"]
 AI_BUDDY_BILLING_BALANCE_GUARD_ENABLED = true
 AI_BUDDY_BILLING_BALANCE_MIN_USD = 0
 AI_BUDDY_BILLING_BALANCE_GUARD_SKIP_SUPERUSER = false
+AI_BUDDY_BILLING_DISPLAY_CURRENCY = "USD"
+AI_BUDDY_BILLING_DISPLAY_CURRENCY_SYMBOL = "$"
+AI_BUDDY_BILLING_DISPLAY_CURRENCY_RATE = 1
+AI_BUDDY_BILLING_DISPLAY_CURRENCY_DECIMALS = 2
