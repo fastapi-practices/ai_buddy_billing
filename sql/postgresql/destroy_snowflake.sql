@@ -1,17 +1,23 @@
 delete from sys_menu
 where name in (
-    'AddAIBuddyBillingPrice',
-    'RechargeAIBuddyBilling',
-    'AdjustAIBuddyBilling',
+    'AIBuddyBillingUsageManage',
+    'AIBuddyBillingPriceManage',
+    'AIBuddyBillingAccountManage',
+    'AIBuddyBillingBudgetManage',
     'ReconcileAIBuddyBilling',
-    'AddAIBuddyBillingBudget',
-    'EditAIBuddyBillingBudget',
-    'DeleteAIBuddyBillingBudget',
-    'QueryAIBuddyBillingAccount',
+    'AddAIBuddyBillingPrice',
     'EditAIBuddyBillingPrice',
     'DeleteAIBuddyBillingPrice',
-    'AIBuddyBillingManage'
+    'SyncAIBuddyBillingPrice',
+    'QueryAIBuddyBillingAccount',
+    'RechargeAIBuddyBilling',
+    'AdjustAIBuddyBilling',
+    'AddAIBuddyBillingBudget',
+    'EditAIBuddyBillingBudget',
+    'DeleteAIBuddyBillingBudget'
 );
+
+delete from sys_menu where name = 'PluginAIBuddyBilling';
 
 drop table if exists ai_buddy_billing_budget;
 drop table if exists ai_buddy_billing_transaction;

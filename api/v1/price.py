@@ -14,8 +14,10 @@ from backend.common.security.rbac import DependsRBAC
 from backend.database.db import CurrentSession, CurrentSessionTransaction
 from backend.plugin.ai_buddy_billing.schema.price import (
     AIBuddyBillingPriceQueryParam,
+    AIBuddyBillingPriceSyncParam,
     CreateAIBuddyBillingPriceParam,
     GetAIBuddyBillingPriceDetail,
+    GetAIBuddyBillingPriceSyncDetail,
     UpdateAIBuddyBillingPriceParam,
 )
 from backend.plugin.ai_buddy_billing.service.price_service import ai_buddy_billing_price_service
@@ -58,6 +60,38 @@ async def get_ai_buddy_billing_prices_paginated(
         model_id=query.model_id,
         active=query.active,
     )
+    return response_base.success(data=data)
+
+
+@router.post(
+    '/sync/preview',
+    summary='预览 models.dev 价格同步',
+    dependencies=[
+        Depends(RequestPermission('ai:billing:price:sync')),
+        DependsRBAC,
+    ],
+)
+async def preview_ai_buddy_billing_price_sync(
+    db: CurrentSession,
+    obj: AIBuddyBillingPriceSyncParam,
+) -> ResponseSchemaModel[GetAIBuddyBillingPriceSyncDetail]:
+    data = await ai_buddy_billing_price_service.preview_sync(db=db, obj=obj)
+    return response_base.success(data=data)
+
+
+@router.post(
+    '/sync',
+    summary='同步 models.dev 价格',
+    dependencies=[
+        Depends(RequestPermission('ai:billing:price:sync')),
+        DependsRBAC,
+    ],
+)
+async def sync_ai_buddy_billing_prices(
+    db: CurrentSessionTransaction,
+    obj: AIBuddyBillingPriceSyncParam,
+) -> ResponseSchemaModel[GetAIBuddyBillingPriceSyncDetail]:
+    data = await ai_buddy_billing_price_service.sync(db=db, obj=obj)
     return response_base.success(data=data)
 
 

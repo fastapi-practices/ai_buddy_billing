@@ -20,7 +20,14 @@ from backend.plugin.ai_buddy_billing.schema.ledger import (
     GetAIBuddyBillingSummaryDetail,
 )
 from backend.plugin.ai_buddy_billing.schema.transaction import CreateAIBuddyBillingTransactionParam
-from backend.plugin.ai_buddy_billing.utils.usage import BillingUsageRecord, calculate_token_cost, extract_usage_records
+from backend.plugin.ai_buddy_billing.utils.pricing import (
+    PriceQuote,
+    build_quote,
+    calculate_cost,
+    prompt_tokens,
+    terms_from_price,
+)
+from backend.plugin.ai_buddy_billing.utils.usage import BillingUsageRecord, extract_usage_records
 
 
 class AIBuddyBillingLedgerService:
@@ -95,6 +102,7 @@ class AIBuddyBillingLedgerService:
             output_tokens=summary['output_tokens'],
             cache_read_tokens=summary['cache_read_tokens'],
             cache_write_tokens=summary['cache_write_tokens'],
+            output_reasoning_tokens=summary['output_reasoning_tokens'],
             generated_images=summary['generated_images'],
             provider_cost=summary['provider_cost'],
             billed_cost=summary['billed_cost'],
@@ -137,13 +145,13 @@ class AIBuddyBillingLedgerService:
                 unpriced += 1
                 continue
             for record in records:
-                price = await ai_buddy_billing_price_dao.get_active(
+                price = await ai_buddy_billing_price_dao.get_active_or_default(
                     db,
                     provider_id=message.provider_id,
                     model_id=record.model_id,
                     effective_time=record.usage_time,
                 )
-                billed_cost, status, price_id = self._resolve_cost(record=record, price=price)
+                billed_cost, status, price_id, quote = self._resolve_cost(record=record, price=price)
                 ledger = await ai_buddy_billing_ledger_dao.create(
                     db,
                     CreateAIBuddyBillingLedgerParam(
@@ -162,18 +170,22 @@ class AIBuddyBillingLedgerService:
                         input_audio_tokens=record.input_audio_tokens,
                         output_audio_tokens=record.output_audio_tokens,
                         cache_audio_read_tokens=record.cache_audio_read_tokens,
+                        output_reasoning_tokens=record.output_reasoning_tokens,
                         generated_images=record.generated_images,
                         provider_cost=record.provider_cost,
                         billed_cost=billed_cost,
+                        price_multiplier=quote.multiplier if quote is not None else Decimal(1),
+                        price_window=quote.window if quote is not None else None,
+                        price_tier=quote.tier if quote is not None else None,
                         price_id=price_id,
                         status=status.value,
                     ),
                 )
                 recorded += 1
-                if status == AIBuddyBillingLedgerStatus.unpriced:
-                    unpriced += 1
-                else:
+                if status == AIBuddyBillingLedgerStatus.billed:
                     billed += 1
+                else:
+                    unpriced += 1
                 if billed_cost > 0:
                     await self._charge_usage(
                         db=db,
@@ -193,34 +205,26 @@ class AIBuddyBillingLedgerService:
         *,
         record: BillingUsageRecord,
         price: AIBuddyBillingPrice | None,
-    ) -> tuple[Decimal, AIBuddyBillingLedgerStatus, int | None]:
+    ) -> tuple[Decimal, AIBuddyBillingLedgerStatus, int | None, PriceQuote | None]:
         """
         解析单次用量的结算费用
+
+        价格缺失时只记录供应商成本，不把供应商成本当作结算价，避免按成本价转售
 
         :param record: 用量记录
         :param price: 生效价格
         :return:
         """
         if price is not None:
-            rates = {
-                'input_price': price.input_price,
-                'output_price': price.output_price,
-                'cache_read_price': price.cache_read_price,
-                'cache_write_price': price.cache_write_price,
-                'input_audio_price': price.input_audio_price,
-                'output_audio_price': price.output_audio_price,
-                'cache_audio_read_price': price.cache_audio_read_price,
-            }
-            billed_cost = calculate_token_cost(usage=record, rates=rates)
-            billed_cost += Decimal(record.generated_images) * price.image_price
-            return billed_cost.quantize(Decimal('0.00000001')), AIBuddyBillingLedgerStatus.billed, price.id
-        if record.provider_cost is not None:
-            return (
-                max(record.provider_cost, Decimal(0)).quantize(Decimal('0.00000001')),
-                AIBuddyBillingLedgerStatus.provider_cost,
-                None,
+            quote = build_quote(
+                terms=terms_from_price(price),
+                usage_time=record.usage_time,
+                prompt_token_count=prompt_tokens(record),
             )
-        return Decimal(0), AIBuddyBillingLedgerStatus.unpriced, None
+            return calculate_cost(usage=record, quote=quote), AIBuddyBillingLedgerStatus.billed, price.id, quote
+        if record.provider_cost is not None:
+            return Decimal(0), AIBuddyBillingLedgerStatus.provider_cost, None, None
+        return Decimal(0), AIBuddyBillingLedgerStatus.unpriced, None, None
 
     @staticmethod
     async def _charge_usage(

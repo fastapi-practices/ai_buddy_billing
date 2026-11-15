@@ -54,9 +54,7 @@ class AIBuddyBillingBudgetService:
         )
         return await paging_data(db, stmt)
 
-    async def create(
-        self, *, db: AsyncSession, obj: CreateAIBuddyBillingBudgetParam
-    ) -> GetAIBuddyBillingBudgetDetail:
+    async def create(self, *, db: AsyncSession, obj: CreateAIBuddyBillingBudgetParam) -> GetAIBuddyBillingBudgetDetail:
         """
         创建计费预算
 

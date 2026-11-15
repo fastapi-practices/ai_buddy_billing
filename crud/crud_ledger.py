@@ -83,6 +83,7 @@ class CRUDAIBuddyBillingLedger(CRUDPlus[AIBuddyBillingLedger]):
             func.coalesce(func.sum(self.model.generated_images), 0),
             func.coalesce(func.sum(self.model.provider_cost), Decimal(0)),
             func.coalesce(func.sum(self.model.billed_cost), Decimal(0)),
+            func.coalesce(func.sum(self.model.output_reasoning_tokens), 0),
         ).where(self.model.deleted == 0)
         if user_id is not None:
             stmt = stmt.where(self.model.user_id == user_id)
@@ -100,6 +101,7 @@ class CRUDAIBuddyBillingLedger(CRUDPlus[AIBuddyBillingLedger]):
             'generated_images': row[5],
             'provider_cost': row[6],
             'billed_cost': row[7],
+            'output_reasoning_tokens': row[8],
         }
 
     async def create(self, db: AsyncSession, obj: CreateAIBuddyBillingLedgerParam) -> AIBuddyBillingLedger:

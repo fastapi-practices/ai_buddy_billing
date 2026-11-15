@@ -38,8 +38,14 @@ class AIBuddyBillingLedger(Base):
     input_audio_tokens: Mapped[int] = mapped_column(sa.BigInteger, default=0, comment='音频输入 token 数')
     output_audio_tokens: Mapped[int] = mapped_column(sa.BigInteger, default=0, comment='音频输出 token 数')
     cache_audio_read_tokens: Mapped[int] = mapped_column(sa.BigInteger, default=0, comment='音频缓存读取 token 数')
+    output_reasoning_tokens: Mapped[int] = mapped_column(sa.BigInteger, default=0, comment='推理输出 token 数')
     generated_images: Mapped[int] = mapped_column(sa.Integer, default=0, comment='生成图片数量')
     provider_cost: Mapped[Decimal | None] = mapped_column(sa.Numeric(20, 8), default=None, comment='供应商成本')
     billed_cost: Mapped[Decimal] = mapped_column(sa.Numeric(20, 8), default=Decimal(0), comment='结算费用')
+    price_multiplier: Mapped[Decimal] = mapped_column(
+        sa.Numeric(10, 4), default=Decimal(1), comment='结算时生效的峰谷倍率'
+    )
+    price_window: Mapped[str | None] = mapped_column(sa.String(64), default=None, comment='命中的峰谷价格时段')
+    price_tier: Mapped[str | None] = mapped_column(sa.String(64), default=None, comment='命中的上下文阶梯阈值')
     price_id: Mapped[int | None] = mapped_column(sa.BigInteger, default=None, index=True, comment='使用的价格 ID')
     status: Mapped[str] = mapped_column(sa.String(32), default='unpriced', comment='账本状态')

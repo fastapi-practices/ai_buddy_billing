@@ -20,6 +20,7 @@ class BillingUsageRecord:
     input_audio_tokens: int
     output_audio_tokens: int
     cache_audio_read_tokens: int
+    output_reasoning_tokens: int
     generated_images: int
     provider_cost: Decimal | None
     details: dict[str, int]
@@ -104,6 +105,7 @@ def extract_usage_records(
         input_audio_tokens = _as_int(usage.get('input_audio_tokens'))
         output_audio_tokens = _as_int(usage.get('output_audio_tokens'))
         cache_audio_read_tokens = _as_int(usage.get('cache_audio_read_tokens'))
+        output_reasoning_tokens = _as_int(usage.get('output_reasoning_tokens'))
         provider_cost = _as_decimal(usage.get('cost'))
         if not any((
             input_tokens,
@@ -113,6 +115,7 @@ def extract_usage_records(
             input_audio_tokens,
             output_audio_tokens,
             cache_audio_read_tokens,
+            output_reasoning_tokens,
             generated_images,
             provider_cost is not None,
             details,
@@ -131,33 +134,10 @@ def extract_usage_records(
                 input_audio_tokens=input_audio_tokens,
                 output_audio_tokens=output_audio_tokens,
                 cache_audio_read_tokens=cache_audio_read_tokens,
+                output_reasoning_tokens=output_reasoning_tokens,
                 generated_images=generated_images,
                 provider_cost=provider_cost,
                 details=details,
             )
         )
     return records
-
-
-def calculate_token_cost(*, usage: BillingUsageRecord, rates: Mapping[str, Decimal]) -> Decimal:
-    """
-    按每百万 token 单价计算模型费用
-
-    :param usage: 用量记录
-    :param rates: token 单价映射
-    :return:
-    """
-    tokens = {
-        'input_price': usage.input_tokens,
-        'output_price': usage.output_tokens,
-        'cache_read_price': usage.cache_read_tokens,
-        'cache_write_price': usage.cache_write_tokens,
-        'input_audio_price': usage.input_audio_tokens,
-        'output_audio_price': usage.output_audio_tokens,
-        'cache_audio_read_price': usage.cache_audio_read_tokens,
-    }
-    cost = sum(
-        (Decimal(tokens[name]) * rate / Decimal(1_000_000) for name, rate in rates.items() if name in tokens),
-        Decimal(0),
-    )
-    return cost.quantize(Decimal('0.00000001'))

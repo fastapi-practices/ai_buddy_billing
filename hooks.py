@@ -23,6 +23,8 @@ async def _reconcile_loop() -> None:
                 result = await ai_buddy_billing_ledger_service.reconcile(db=db)
             if result.recorded:
                 log.info(f'AI Buddy 计费归集完成 recorded={result.recorded} billed={result.billed}')
+            if result.unpriced:
+                log.warning(f'AI Buddy 计费归集存在未结算用量 unpriced={result.unpriced}')
         except asyncio.CancelledError:
             raise
         except Exception as exc:

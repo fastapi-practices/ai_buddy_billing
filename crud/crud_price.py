@@ -8,6 +8,8 @@ from sqlalchemy_crud_plus import CRUDPlus
 
 from backend.plugin.ai_buddy_billing.model import AIBuddyBillingPrice
 from backend.plugin.ai_buddy_billing.schema.price import CreateAIBuddyBillingPriceParam
+from backend.plugin.ai_buddy_billing.utils.pricing import DEFAULT_PRICE_MODEL_ID, DEFAULT_PRICE_PROVIDER_ID
+from backend.utils.timezone import timezone
 
 
 class CRUDAIBuddyBillingPrice(CRUDPlus[AIBuddyBillingPrice]):
@@ -125,6 +127,88 @@ class CRUDAIBuddyBillingPrice(CRUDPlus[AIBuddyBillingPrice]):
             **filters,
         )
 
+    async def get_active_or_default(
+        self,
+        db: AsyncSession,
+        *,
+        provider_id: int,
+        model_id: str,
+        effective_time: datetime,
+    ) -> AIBuddyBillingPrice | None:
+        """
+        获取生效价格，未配置时回退到保底价
+
+        :param db: 数据库会话
+        :param provider_id: 供应商 ID
+        :param model_id: 模型 ID
+        :param effective_time: 生效判断时间
+        :return:
+        """
+        price = await self.get_active(
+            db,
+            provider_id=provider_id,
+            model_id=model_id,
+            effective_time=effective_time,
+        )
+        if price is not None:
+            return price
+        return await self.get_active(
+            db,
+            provider_id=DEFAULT_PRICE_PROVIDER_ID,
+            model_id=DEFAULT_PRICE_MODEL_ID,
+            effective_time=effective_time,
+        )
+
+    async def get_unexpired(
+        self,
+        db: AsyncSession,
+        *,
+        provider_id: int,
+        model_id: str,
+        effective_time: datetime,
+    ) -> AIBuddyBillingPrice | None:
+        """
+        获取指定时间仍可能生效的价格，用于阻止重复添加
+
+        :param db: 数据库会话
+        :param provider_id: 供应商 ID
+        :param model_id: 模型 ID
+        :param effective_time: 生效判断时间
+        :return:
+        """
+        rows = await self.select_models_order(
+            db,
+            'effective_from',
+            'desc',
+            or_(self.model.effective_to.is_(None), self.model.effective_to > effective_time),
+            limit=1,
+            provider_id=provider_id,
+            model_id=model_id,
+            deleted=0,
+        )
+        return rows[0] if rows else None
+
+    async def get_all_unexpired(
+        self,
+        db: AsyncSession,
+        *,
+        effective_time: datetime,
+    ) -> Sequence[AIBuddyBillingPrice]:
+        """
+        获取指定时间仍可能生效的全部价格
+
+        :param db: 数据库会话
+        :param effective_time: 生效判断时间
+        :return:
+        """
+        return await self.select_models_order(
+            db,
+            ['provider_id', 'model_id'],
+            ['asc', 'asc'],
+            or_(self.model.effective_to.is_(None), self.model.effective_to > effective_time),
+            deleted=0,
+        )
+
     async def close_active(
         self,
         db: AsyncSession,
@@ -135,6 +219,8 @@ class CRUDAIBuddyBillingPrice(CRUDPlus[AIBuddyBillingPrice]):
     ) -> None:
         """
         关闭上一版生效价格
+
+        生效区间为范围条件，无法用 CRUDPlus 的等值过滤表达，因此直接在 CRUD 内执行批量更新
 
         :param db: 数据库会话
         :param provider_id: 供应商 ID
@@ -154,6 +240,17 @@ class CRUDAIBuddyBillingPrice(CRUDPlus[AIBuddyBillingPrice]):
             .values(effective_to=effective_time)
         )
 
+    async def create(self, db: AsyncSession, obj: CreateAIBuddyBillingPriceParam, **values: Any) -> AIBuddyBillingPrice:
+        """
+        创建价格记录
+
+        :param db: 数据库会话
+        :param obj: 创建参数
+        :param values: 额外的模型字段值，例如价格来源
+        :return:
+        """
+        return await self.create_model(db, obj, flush=True, **values)
+
     async def update(self, db: AsyncSession, *, pk: int, values: dict[str, Any]) -> int:
         """
         更新价格记录
@@ -165,15 +262,24 @@ class CRUDAIBuddyBillingPrice(CRUDPlus[AIBuddyBillingPrice]):
         """
         return await self.update_model_by_column(db, values, id=pk, deleted=0)
 
-    async def create(self, db: AsyncSession, obj: CreateAIBuddyBillingPriceParam) -> AIBuddyBillingPrice:
+    async def delete(self, db: AsyncSession, *, pk: int) -> int:
         """
-        创建价格记录
+        删除价格记录
 
         :param db: 数据库会话
-        :param obj: 创建参数
+        :param pk: 价格 ID
         :return:
         """
-        return await self.create_model(db, obj, flush=True)
+        return await self.delete_model_by_column(
+            db,
+            logical_deletion=True,
+            deleted_flag_column='deleted',
+            deleted_flag_value=self.model.id,
+            deleted_at_column='deleted_time',
+            deleted_at_factory=timezone.now,
+            id=pk,
+            deleted=0,
+        )
 
 
 ai_buddy_billing_price_dao: CRUDAIBuddyBillingPrice = CRUDAIBuddyBillingPrice(AIBuddyBillingPrice)
